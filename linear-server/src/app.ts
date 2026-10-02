@@ -13,6 +13,10 @@ import cycleController from "./controller/cycle.controller";
 import commentController from "./controller/comment.controller";
 import activityController from "./controller/activity.controller";
 import uploadController from "./controller/upload.controller";
+import authController from "./controller/auth.controller";
+import viewController from "./controller/view.controller";
+import statusViewController from "./controller/statusview.controller";
+import { optionalAuth } from "./middleware/auth";
 
 const app = express();
 
@@ -21,8 +25,13 @@ app.use(cors());
 app.use(json());
 app.use("/uploads", express.static("uploads"));
 
-// Routes
-app.use("/ticket", ticketController);
+// Public auth routes (no token needed)
+app.use("/auth", authController);
+
+// Routes — soft auth attaches user when Bearer token is present
+app.use("/ticket", optionalAuth, ticketController);
+app.use("/statusview", optionalAuth, statusViewController);
+app.use("/view", optionalAuth, viewController);
 app.use("/user", userController);
 app.use("/team", teamController);
 app.use("/project", projectController);

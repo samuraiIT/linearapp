@@ -32,9 +32,9 @@ import CommandPalette from "../components/CommandPalette";
 import IssueDetailModal from "../components/IssueDetailModal";
 import SidebarToggle from "../components/SidebarToggle";
 import { AppProvider, useApp } from "../lib/context";
-import { ticketAPI, projectAPI, cycleAPI, labelAPI, activityAPI, userAPI } from "../lib/api";
+import { ticketAPI, projectAPI, cycleAPI, labelAPI, activityAPI, userAPI, SERVER_WS } from "../lib/api";
 
-const server = process.env.NEXT_PUBLIC_SERVER_URL || "https://linear-server.onrender.com";
+const server = SERVER_WS;
 var socket: Socket<DefaultEventsMap, DefaultEventsMap>;
 
 const columnList = [
@@ -46,7 +46,7 @@ const columnList = [
 
 function HomeContent() {
   const router = useRouter();
-  const { currentTeam } = useApp();
+  const { currentTeam, user } = useApp();
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -220,7 +220,7 @@ function HomeContent() {
         ...currentTicket,
         team: currentTeam._id,
         dueDate: currentTicket.dueDate ? new Date(currentTicket.dueDate) : undefined,
-        createdBy: "1",
+        createdBy: user?._id,
       };
       const { data } = await ticketAPI.create(ticketData);
       socket.emit("create-ticket", { ...data, team: currentTeam._id });
@@ -304,7 +304,7 @@ function HomeContent() {
               <div className="avatar">{currentTeam?.identifier?.substring(0, 2) || "LI"}</div>
               <div className="org">{currentTeam?.name || "LINEAR"}</div>
             </div>
-            <div className="user_profile">DU</div>
+            <div className="user_profile">{(user?.name || "U").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}</div>
           </div>
           <div className="issue-search">
             <div
@@ -328,7 +328,7 @@ function HomeContent() {
               </div>
               <div onClick={() => {
                 setActiveView('my-issues');
-                setFilters({ ...filters, assignee: '1' }); // Mock user ID
+                if (user) setFilters({ ...filters, assignee: user._id });
               }} className={activeView === 'my-issues' ? 'active' : ''}>
                 <MyIssue />
                 My Issues

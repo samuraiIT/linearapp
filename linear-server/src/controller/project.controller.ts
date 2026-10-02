@@ -57,6 +57,39 @@ router.post("/", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /roadmap — projects grouped by targetDate for roadmap view
+ */
+router.get("/roadmap", async (req: Request, res: Response) => {
+  try {
+    const { team } = req.query;
+    const query: any = {};
+    if (team) query.team = team;
+    const projects = await ProjectModel.find(query)
+      .populate("team")
+      .populate("lead")
+      .sort({ targetDate: 1, startDate: 1 });
+    return res.status(200).send(projects);
+  } catch (error) {
+    return res.status(400).send({ message: error });
+  }
+});
+
+/**
+ * GET /:id/issues — issues belonging to a project
+ */
+router.get("/:id/issues", async (req: Request, res: Response) => {
+  try {
+    const issues = await TicketModel.find({ project: req.params.id })
+      .populate("assignee")
+      .populate("labels")
+      .populate("cycle");
+    return res.status(200).send(issues);
+  } catch (error) {
+    return res.status(400).send({ message: error });
+  }
+});
+
 router.patch("/:id", async (req: Request, res: Response) => {
   try {
     const project = await ProjectModel.findByIdAndUpdate(req.params.id, req.body, {

@@ -1,6 +1,18 @@
 import axios from "axios";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://linear-server.onrender.com";
+// Prefer explicit env; fall back to same-host /api (works with docker-compose nginx),
+// then localhost dev server.
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== "undefined" && window.location.hostname !== "localhost"
+    ? `${window.location.protocol}//${window.location.host}/api`
+    : "http://localhost:3005");
+
+export const SERVER_WS =
+  process.env.NEXT_PUBLIC_SERVER_URL ||
+  (typeof window !== "undefined" && window.location.hostname !== "localhost"
+    ? `${window.location.protocol}//${window.location.host}`
+    : "http://localhost:3005");
 
 export const api = axios.create({
   baseURL: API_BASE,
@@ -9,6 +21,43 @@ export const api = axios.create({
   },
 });
 
+// ---- Auth token storage ----
+let authToken: string | null = null;
+try {
+  if (typeof window !== "undefined") {
+    authToken = localStorage.getItem("linear_token");
+  }
+} catch {}
+
+export function setToken(token: string | null) {
+  authToken = token;
+  try {
+    if (token) localStorage.setItem("linear_token", token);
+    else localStorage.removeItem("linear_token");
+  } catch {}
+}
+
+export function getToken() {
+  return authToken;
+}
+
+api.interceptors.request.use((config) => {
+  if (authToken) {
+    config.headers = config.headers || {};
+    (config.headers as any).Authorization = `Bearer ${authToken}`;
+  }
+  return config;
+});
+
+// ---- Auth API ----
+export const authAPI = {
+  signup: (data: { email: string; password: string; name?: string; workspaceName?: string; teamName?: string; teamIdentifier?: string }) =>
+    api.post("/auth/signup", data),
+  login: (data: { email: string; password: string }) => api.post("/auth/login", data),
+  me: () => api.get("/auth/me"),
+  updateMe: (data: any) => api.patch("/auth/me", data),
+};
+
 // Tickets
 export const ticketAPI = {
   getAll: (params?: any) => api.get("/ticket", { params }),
@@ -16,6 +65,27 @@ export const ticketAPI = {
   create: (data: any) => api.post("/ticket", data),
   update: (id: string, data: any) => api.patch(`/ticket/${id}`, data),
   delete: (id: string) => api.delete(`/ticket/${id}`),
+  children: (id: string) => api.get(`/ticket/${id}/children`),
+  subscribe: (id: string, data?: any) => api.post(`/ticket/${id}/subscribe`, data || {}),
+  subscribers: (id: string) => api.get(`/ticket/${id}/subscribers`),
+  batch: (ids: string[], changes: any) => api.post("/ticket/batch", { ids, changes }),
+};
+
+// Inbox — notifications for issues I'm subscribed to
+export const inboxAPI = {
+  list: () => api.get("/view/inbox"),
+};
+
+// Saved views / filters
+export const viewAPI = {
+  getAll: () => api.get("/view"),
+  create: (data: any) => api.post("/view", data),
+  remove: (id: string) => api.delete(`/view/${id}`),
+};
+
+// Cycles analytics
+export const cycleStatsAPI = {
+  stats: (id: string) => api.get(`/cycle/${id}/stats`),
 };
 
 // Users

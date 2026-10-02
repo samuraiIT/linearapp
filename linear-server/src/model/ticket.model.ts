@@ -4,7 +4,11 @@ export interface ITicket {
   _id?: string;
   title: string;
   description?: string;
-  status: "TODO" | "INPROGRESS" | "IN_DEV_REVIEW" | "DONE" | "CANCELLED";
+  status: "BACKLOG" | "TODO" | "INPROGRESS" | "IN_DEV_REVIEW" | "DONE" | "CANCELLED";
+  estimate?: number;
+  parentIssue?: string;
+  relatedIssues?: string[];
+  blockedByIds?: string[];
   priority: "URGENT" | "HIGH" | "MEDIUM" | "LOW";
   issueId: string;
   team: string;
@@ -27,9 +31,13 @@ const ticketSchema = new Schema<ITicket>(
     description: { type: String },
     status: {
       type: String,
-      enum: ["TODO", "INPROGRESS", "IN_DEV_REVIEW", "DONE", "CANCELLED"],
+      enum: ["BACKLOG", "TODO", "INPROGRESS", "IN_DEV_REVIEW", "DONE", "CANCELLED"],
       default: "TODO",
     },
+    estimate: { type: Number },
+    parentIssue: { type: Schema.Types.ObjectId as any, ref: "ticket" },
+    relatedIssues: [{ type: Schema.Types.ObjectId as any, ref: "ticket" }],
+    blockedByIds: [{ type: Schema.Types.ObjectId as any, ref: "ticket" }],
     priority: {
       type: String,
       enum: ["URGENT", "HIGH", "MEDIUM", "LOW"],

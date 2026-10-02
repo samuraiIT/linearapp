@@ -38,6 +38,7 @@ const server = SERVER_WS;
 var socket: Socket<DefaultEventsMap, DefaultEventsMap>;
 
 const columnList = [
+  { name: "Backlog", icon: Todo, value: "BACKLOG" },
   { name: "Todo", icon: Todo, value: "TODO" },
   { name: "In Progress", icon: InprogressIcon, value: "INPROGRESS" },
   { name: "In Dev Review", icon: IndevReview, value: "IN_DEV_REVIEW" },
@@ -65,6 +66,7 @@ function HomeContent() {
   const [sortBy, setSortBy] = useState("sortOrder");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
+  const [backlog, setBacklog] = useState<any[]>([]);
   const [todo, setTodo] = useState<any[]>([]);
   const [inprogress, setInProgress] = useState<any[]>([]);
   const [indev, setIndev] = useState<any[]>([]);
@@ -75,7 +77,7 @@ function HomeContent() {
   const [users, setUsers] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
 
-  const filterTicket = [todo, inprogress, indev, done];
+  const filterTicket = [backlog, todo, inprogress, indev, done];
   const [currentTicket, setCurrentTicket] = useState({
     title: "",
     description: "",
@@ -176,12 +178,13 @@ function HomeContent() {
   };
 
   const organizeTickets = (tickets: any[]) => {
-    const organized: { [key: string]: any[] } = { TODO: [], INPROGRESS: [], IN_DEV_REVIEW: [], DONE: [] };
+    const organized: { [key: string]: any[] } = { BACKLOG: [], TODO: [], INPROGRESS: [], IN_DEV_REVIEW: [], DONE: [] };
     tickets.forEach((ticket) => {
       if (organized[ticket.status as keyof typeof organized]) {
         organized[ticket.status as keyof typeof organized].push(ticket);
       }
     });
+    setBacklog(organized.BACKLOG);
     setTodo(organized.TODO);
     setInProgress(organized.INPROGRESS);
     setIndev(organized.IN_DEV_REVIEW);
@@ -189,7 +192,7 @@ function HomeContent() {
   };
 
   const handleTicketUpdate = (prevStatus: string, receiveData: any) => {
-    const statusMap: any = { TODO: setTodo, INPROGRESS: setInProgress, IN_DEV_REVIEW: setIndev, DONE: setDone };
+    const statusMap: any = { BACKLOG: setBacklog, TODO: setTodo, INPROGRESS: setInProgress, IN_DEV_REVIEW: setIndev, DONE: setDone };
     statusMap[prevStatus]((prev: any[]) => prev.filter((el: any) => el._id !== receiveData._id));
     statusMap[receiveData.status]((prev: any[]) => {
       if (!prev.find((el: any) => el._id === receiveData._id)) {
@@ -200,7 +203,7 @@ function HomeContent() {
   };
 
   const handleNewTicket = (receiveData: any) => {
-    const statusMap: any = { TODO: setTodo, INPROGRESS: setInProgress, IN_DEV_REVIEW: setIndev, DONE: setDone };
+    const statusMap: any = { BACKLOG: setBacklog, TODO: setTodo, INPROGRESS: setInProgress, IN_DEV_REVIEW: setIndev, DONE: setDone };
     statusMap[receiveData.status]((prev: any[]) => {
       if (!prev.find((el: any) => el._id === receiveData._id)) {
         return [receiveData, ...prev];
@@ -249,8 +252,8 @@ function HomeContent() {
     if (source.droppableId === destination.droppableId && source.index === destination.index)
       return;
 
-    const statusLists: any = { TODO: todo, INPROGRESS: inprogress, IN_DEV_REVIEW: indev, DONE: done };
-    const setters: any = { TODO: setTodo, INPROGRESS: setInProgress, IN_DEV_REVIEW: setIndev, DONE: setDone };
+    const statusLists: any = { BACKLOG: backlog, TODO: todo, INPROGRESS: inprogress, IN_DEV_REVIEW: indev, DONE: done };
+    const setters: any = { BACKLOG: setBacklog, TODO: setTodo, INPROGRESS: setInProgress, IN_DEV_REVIEW: setIndev, DONE: setDone };
 
     if (source.droppableId === destination.droppableId) {
       const list = [...statusLists[source.droppableId]];
@@ -284,7 +287,7 @@ function HomeContent() {
   };
 
   // Check if there are any issues to display
-  const allIssues = [...todo, ...inprogress, ...indev, ...done];
+  const allIssues = [...backlog, ...todo, ...inprogress, ...indev, ...done];
   const hasNoIssues = allIssues.length === 0;
   const isMyIssuesView = activeView === 'my-issues';
 
@@ -382,6 +385,7 @@ function HomeContent() {
                   onChange={(e) => setFilters({ ...filters, status: e.target.value })}
                 >
                   <option value="">All Status</option>
+                  <option value="BACKLOG">Backlog</option>
                   <option value="TODO">Todo</option>
                   <option value="INPROGRESS">In Progress</option>
                   <option value="IN_DEV_REVIEW">In Dev Review</option>
@@ -557,7 +561,7 @@ function HomeContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {[...todo, ...inprogress, ...indev, ...done].map((issue) => (
+                    {[...backlog, ...todo, ...inprogress, ...indev, ...done].map((issue) => (
                       <tr key={issue._id} onClick={() => openIssue(issue._id)}>
                         <td>
                           <div className="issue-id">{issue.issueId}</div>
@@ -625,6 +629,7 @@ function HomeContent() {
                 className="status-select"
                 value={currentTicket.status}
               >
+                <option value="BACKLOG">Backlog</option>
                 <option value="TODO">Todo</option>
                 <option value="INPROGRESS">In Progress</option>
                 <option value="IN_DEV_REVIEW">In Dev Review</option>

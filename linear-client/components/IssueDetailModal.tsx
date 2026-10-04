@@ -36,13 +36,72 @@ export default function IssueDetailModal({
   const [users, setUsers] = useState<any[]>([]);
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [children, setChildren] = useState<any[]>([]);
+  const [subTitle, setSubTitle] = useState("");
+  const [estimateVal, setEstimateVal] = useState<number | "">("");
+  const [isSubscribed, setIsSubscribed] = useState(false);
 
   useEffect(() => {
     if (isOpen && issueId) {
       loadIssue();
       loadComments();
+      loadChildren();
+      checkSubscription();
     }
   }, [isOpen, issueId]);
+
+  const loadChildren = async () => {
+    try {
+      const res = await ticketAPI.children(issueId!);
+      setChildren(res.data || []);
+    } catch {
+      setChildren([]);
+    }
+  };
+
+  const checkSubscription = async () => {
+    try {
+      const res = await ticketAPI.subscribers(issueId!);
+      const uid = user?._id ? String(user._id) : null;
+      const subs: any[] = res.data || [];
+      setIsSubscribed(!!uid && subs.some((s: any) => {
+        const sid = typeof s.user === "object" ? s.user?._id : s.user;
+        return String(sid) === uid;
+      }));
+    } catch {}
+  };
+
+  const toggleSubscribe = async () => {
+    try {
+      await ticketAPI.subscribe(issueId!);
+      setIsSubscribed((v) => !v);
+    } catch (error) {
+      console.error("Error subscribing:", error);
+    }
+  };
+
+  const addSubIssue = async () => {
+    if (!subTitle.trim() || !issue) return;
+    try {
+      await ticketAPI.create({
+        title: subTitle.trim(),
+        team: issue.team?._id,
+        status: "BACKLOG",
+        parentIssue: issue._id,
+        createdBy: user?._id,
+      });
+      setSubTitle("");
+      await loadChildren();
+      onUpdate();
+    } catch (error) {
+      console.error("Error creating sub-issue:", error);
+    }
+  };
+
+  const saveEstimate = async () => {
+    const val = estimateVal === "" ? null : Number(estimateVal);
+    await handleUpdate("estimate", val);
+  };
 
   useEffect(() => {
     if (issue) {
@@ -373,6 +432,32 @@ export default function IssueDetailModal({
               </div>
             )}
 
+            {/* Sub-issues */}
+            <div className="issue-modal-section">
+              <h3 className="issue-modal-section-title">
+                Sub-issues {children.length > 0 && `(${children.length})`}
+              </h3>
+              {children.map((sub: any) => (
+                <div key={sub._id} className="sub-issue-row" style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0" }}>
+                  <span style={{ color: "#858699", fontSize: 12 }}>{sub.issueId}</span>
+                  <span style={{ flex: 1, textDecoration: sub.status === "DONE" ? "line-through" : "none" }}>{sub.title}</span>
+                  <span className={`status-badge status-${sub.status}`} style={{ fontSize: 10 }}>{sub.status}</span>
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <input
+                  type="text"
+                  placeholder="Add sub-issue..."
+                  value={subTitle}
+                  onChange={(e) => setSubTitle(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addSubIssue()}
+                  className="issue-modal-input"
+                  style={{ flex: 1 }}
+                />
+                <button onClick={addSubIssue} className="issue-modal-comment-button" style={{ padding: "4px 10px" }}>Add</button>
+              </div>
+            </div>
+
             {/* Description */}
             <div className="issue-modal-section">
               <h3 className="issue-modal-section-title">Description</h3>
@@ -602,11 +687,41 @@ export default function IssueDetailModal({
                 onChange={(e) => handleUpdate("status", e.target.value)}
                 className="issue-modal-select"
               >
+                <option value="BACKLOG">Backlog</option>
                 <option value="TODO">Todo</option>
                 <option value="INPROGRESS">In Progress</option>
                 <option value="IN_DEV_REVIEW">In Dev Review</option>
                 <option value="DONE">Done</option>
+                <option value="CANCELLED">Cancelled</option>
               </select>
+            </div>
+
+            {/* Estimate */}
+            <div className="issue-modal-field">
+              <label>Estimate</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                <input
+                  type="number"
+                  min={0}
+                  value={issue.estimate ?? estimateVal}
+                  onChange={(e) => setEstimateVal(e.target.value === "" ? "" : Number(e.target.value))}
+                  className="issue-modal-input"
+                  placeholder="—"
+                  style={{ flex: 1 }}
+                />
+                <button onClick={saveEstimate} className="issue-modal-comment-button" style={{ padding: "2px 8px" }}>Save</button>
+              </div>
+            </div>
+
+            {/* Subscribe */}
+            <div className="issue-modal-field">
+              <button
+                onClick={toggleSubscribe}
+                className="issue-modal-comment-button"
+                style={{ width: "100%", background: isSubscribed ? "rgba(94,106,210,0.2)" : undefined }}
+              >
+                {isSubscribed ? "★ Subscribed" : "☆ Subscribe to updates"}
+              </button>
             </div>
 
             {/* Priority */}

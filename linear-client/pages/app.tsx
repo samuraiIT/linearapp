@@ -32,12 +32,13 @@ import CommandPalette from "../components/CommandPalette";
 import IssueDetailModal from "../components/IssueDetailModal";
 import SidebarToggle from "../components/SidebarToggle";
 import { AppProvider, useApp } from "../lib/context";
-import { ticketAPI, projectAPI, cycleAPI, labelAPI, activityAPI, userAPI, SERVER_WS } from "../lib/api";
+import { ticketAPI, projectAPI, cycleAPI, labelAPI, activityAPI, userAPI, inboxAPI, SERVER_WS } from "../lib/api";
 
 const server = SERVER_WS;
 var socket: Socket<DefaultEventsMap, DefaultEventsMap>;
 
 const columnList = [
+  { name: "Backlog", icon: Todo, value: "BACKLOG" },
   { name: "Todo", icon: Todo, value: "TODO" },
   { name: "In Progress", icon: InprogressIcon, value: "INPROGRESS" },
   { name: "In Dev Review", icon: IndevReview, value: "IN_DEV_REVIEW" },
@@ -65,6 +66,7 @@ function HomeContent() {
   const [sortBy, setSortBy] = useState("sortOrder");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
+  const [backlog, setBacklog] = useState<any[]>([]);
   const [todo, setTodo] = useState<any[]>([]);
   const [inprogress, setInProgress] = useState<any[]>([]);
   const [indev, setIndev] = useState<any[]>([]);
@@ -74,8 +76,9 @@ function HomeContent() {
   const [labels, setLabels] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
+  const [inboxItems, setInboxItems] = useState<any[]>([]);
 
-  const filterTicket = [todo, inprogress, indev, done];
+  const filterTicket = [backlog, todo, inprogress, indev, done];
   const [currentTicket, setCurrentTicket] = useState({
     title: "",
     description: "",
@@ -153,7 +156,7 @@ function HomeContent() {
       params.sortBy = sortBy;
       params.order = sortOrder;
 
-      const [ticketsRes, projectsRes, cyclesRes, labelsRes, usersRes, activitiesRes] =
+      const [ticketsRes, projectsRes, cyclesRes, labelsRes, usersRes, activitiesRes, inboxRes] =
         await Promise.all([
           ticketAPI.getAll(params),
           projectAPI.getAll(currentTeam ? { team: currentTeam._id } : {}),
@@ -161,6 +164,7 @@ function HomeContent() {
           labelAPI.getAll(currentTeam ? { team: currentTeam._id } : {}),
           userAPI.getAll(),
           activityAPI.getAll({ team: currentTeam?._id }),
+          inboxAPI.list().catch(() => ({ data: [] })),
         ]);
 
       const tickets = ticketsRes.data || [];
@@ -170,18 +174,20 @@ function HomeContent() {
       setLabels(labelsRes.data || []);
       setUsers(usersRes.data || []);
       setActivities(activitiesRes.data || []);
+      setInboxItems(Array.isArray(inboxRes.data) ? inboxRes.data : []);
     } catch (error) {
       console.error("Error fetching data:", error);
     }
   };
 
   const organizeTickets = (tickets: any[]) => {
-    const organized: { [key: string]: any[] } = { TODO: [], INPROGRESS: [], IN_DEV_REVIEW: [], DONE: [] };
+    const organized: { [key: string]: any[] } = { BACKLOG: [], TODO: [], INPROGRESS: [], IN_DEV_REVIEW: [], DONE: [] };
     tickets.forEach((ticket) => {
       if (organized[ticket.status as keyof typeof organized]) {
         organized[ticket.status as keyof typeof organized].push(ticket);
       }
     });
+    setBacklog(organized.BACKLOG);
     setTodo(organized.TODO);
     setInProgress(organized.INPROGRESS);
     setIndev(organized.IN_DEV_REVIEW);
@@ -189,7 +195,7 @@ function HomeContent() {
   };
 
   const handleTicketUpdate = (prevStatus: string, receiveData: any) => {
-    const statusMap: any = { TODO: setTodo, INPROGRESS: setInProgress, IN_DEV_REVIEW: setIndev, DONE: setDone };
+    const statusMap: any = { BACKLOG: setBacklog, TODO: setTodo, INPROGRESS: setInProgress, IN_DEV_REVIEW: setIndev, DONE: setDone };
     statusMap[prevStatus]((prev: any[]) => prev.filter((el: any) => el._id !== receiveData._id));
     statusMap[receiveData.status]((prev: any[]) => {
       if (!prev.find((el: any) => el._id === receiveData._id)) {
@@ -200,7 +206,7 @@ function HomeContent() {
   };
 
   const handleNewTicket = (receiveData: any) => {
-    const statusMap: any = { TODO: setTodo, INPROGRESS: setInProgress, IN_DEV_REVIEW: setIndev, DONE: setDone };
+    const statusMap: any = { BACKLOG: setBacklog, TODO: setTodo, INPROGRESS: setInProgress, IN_DEV_REVIEW: setIndev, DONE: setDone };
     statusMap[receiveData.status]((prev: any[]) => {
       if (!prev.find((el: any) => el._id === receiveData._id)) {
         return [receiveData, ...prev];
@@ -249,8 +255,8 @@ function HomeContent() {
     if (source.droppableId === destination.droppableId && source.index === destination.index)
       return;
 
-    const statusLists: any = { TODO: todo, INPROGRESS: inprogress, IN_DEV_REVIEW: indev, DONE: done };
-    const setters: any = { TODO: setTodo, INPROGRESS: setInProgress, IN_DEV_REVIEW: setIndev, DONE: setDone };
+    const statusLists: any = { BACKLOG: backlog, TODO: todo, INPROGRESS: inprogress, IN_DEV_REVIEW: indev, DONE: done };
+    const setters: any = { BACKLOG: setBacklog, TODO: setTodo, INPROGRESS: setInProgress, IN_DEV_REVIEW: setIndev, DONE: setDone };
 
     if (source.droppableId === destination.droppableId) {
       const list = [...statusLists[source.droppableId]];
@@ -284,9 +290,10 @@ function HomeContent() {
   };
 
   // Check if there are any issues to display
-  const allIssues = [...todo, ...inprogress, ...indev, ...done];
+  const allIssues = [...backlog, ...todo, ...inprogress, ...indev, ...done];
   const hasNoIssues = allIssues.length === 0;
   const isMyIssuesView = activeView === 'my-issues';
+  const isInboxView = activeView === 'inbox';
 
   return (
     <>
@@ -321,8 +328,7 @@ function HomeContent() {
             <div className="feature">
               <div onClick={() => {
                 setActiveView('inbox');
-                router.push('/activity');
-              }} className={router.pathname === '/activity' ? 'active' : ''}>
+              }} className={activeView === 'inbox' ? 'active' : ''}>
                 <InboxIcon />
                 Inbox
               </div>
@@ -360,7 +366,7 @@ function HomeContent() {
         </div>
         <div className="ticket-cont">
             <div className="top-nav">
-              <div>{activeView === 'my-issues' ? 'My issues' : 'All Issues'}</div>
+              <div>{isInboxView ? 'Inbox' : activeView === 'my-issues' ? 'My issues' : 'All Issues'}</div>
               <StarIcon />
               <div className="view-toggle">
                 <button
@@ -382,6 +388,7 @@ function HomeContent() {
                   onChange={(e) => setFilters({ ...filters, status: e.target.value })}
                 >
                   <option value="">All Status</option>
+                  <option value="BACKLOG">Backlog</option>
                   <option value="TODO">Todo</option>
                   <option value="INPROGRESS">In Progress</option>
                   <option value="IN_DEV_REVIEW">In Dev Review</option>
@@ -417,7 +424,55 @@ function HomeContent() {
                 />
               </div>
             </div>
-            {hasNoIssues ? (
+            {isInboxView ? (
+              inboxItems.length === 0 ? (
+                <div className="empty-state-container">
+                  <div className="empty-state-icon">
+                    <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                      <circle cx="40" cy="40" r="38" stroke="currentColor" strokeWidth="2" opacity="0.2"/>
+                      <circle cx="40" cy="40" r="14" fill="currentColor" opacity="0.5"/>
+                    </svg>
+                  </div>
+                  <h3 className="empty-state-title">Your inbox is empty</h3>
+                  <p className="empty-state-description">
+                    Subscribe to issues (bell icon in the issue view) to get notified about updates here
+                  </p>
+                </div>
+              ) : (
+                <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
+                  {inboxItems.map((item: any, idx: number) => {
+                    const issue = item.issue;
+                    if (!issue) return null;
+                    const last = item.notifications?.[0];
+                    return (
+                      <div
+                        key={issue._id || idx}
+                        className="ticket"
+                        onClick={() => openIssue(issue._id)}
+                        style={{ cursor: "pointer", padding: "12px", borderRadius: 8 }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.7 }}>
+                          <span>{issue.issueId}</span>
+                          <span>{last?.createdAt ? new Date(last.createdAt).toLocaleString() : ""}</span>
+                        </div>
+                        <div className="title">{issue.title}</div>
+                        <div className="ticket-meta" style={{ fontSize: 12, opacity: 0.8 }}>
+                          <span className={`priority priority-${(issue.priority || "medium").toLowerCase()}`}>
+                            {issue.priority}
+                          </span>
+                          <span style={{ marginLeft: 8 }}>{issue.status?.replace("_", " ")}</span>
+                          {last && (
+                            <span style={{ marginLeft: 8 }}>
+                              · {last.user?.name || "Someone"} {last.type || "updated"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : hasNoIssues ? (
               <div className="empty-state-container">
                 <div className="empty-state-icon">
                   <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
@@ -557,7 +612,7 @@ function HomeContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {[...todo, ...inprogress, ...indev, ...done].map((issue) => (
+                    {[...backlog, ...todo, ...inprogress, ...indev, ...done].map((issue) => (
                       <tr key={issue._id} onClick={() => openIssue(issue._id)}>
                         <td>
                           <div className="issue-id">{issue.issueId}</div>
@@ -625,6 +680,7 @@ function HomeContent() {
                 className="status-select"
                 value={currentTicket.status}
               >
+                <option value="BACKLOG">Backlog</option>
                 <option value="TODO">Todo</option>
                 <option value="INPROGRESS">In Progress</option>
                 <option value="IN_DEV_REVIEW">In Dev Review</option>

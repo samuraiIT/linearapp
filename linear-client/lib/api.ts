@@ -112,6 +112,16 @@ export const projectAPI = {
   create: (data: any) => api.post("/project", data),
   update: (id: string, data: any) => api.patch(`/project/${id}`, data),
   delete: (id: string) => api.delete(`/project/${id}`),
+  roadmap: (params?: any) => api.get("/project/roadmap", { params }),
+  issues: (id: string) => api.get(`/project/${id}/issues`),
+};
+
+// Custom status views (workflow states per team)
+export const statusViewAPI = {
+  getAll: (params?: any) => api.get("/statusview", { params }),
+  create: (data: any) => api.post("/statusview", data),
+  update: (id: string, data: any) => api.patch(`/statusview/${id}`, data),
+  delete: (id: string) => api.delete(`/statusview/${id}`),
 };
 
 // Labels

@@ -32,7 +32,7 @@ import CommandPalette from "../components/CommandPalette";
 import IssueDetailModal from "../components/IssueDetailModal";
 import SidebarToggle from "../components/SidebarToggle";
 import { AppProvider, useApp } from "../lib/context";
-import { ticketAPI, projectAPI, cycleAPI, labelAPI, activityAPI, userAPI, SERVER_WS } from "../lib/api";
+import { ticketAPI, projectAPI, cycleAPI, labelAPI, activityAPI, userAPI, inboxAPI, SERVER_WS } from "../lib/api";
 
 const server = SERVER_WS;
 var socket: Socket<DefaultEventsMap, DefaultEventsMap>;
@@ -76,6 +76,7 @@ function HomeContent() {
   const [labels, setLabels] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [activities, setActivities] = useState<any[]>([]);
+  const [inboxItems, setInboxItems] = useState<any[]>([]);
 
   const filterTicket = [backlog, todo, inprogress, indev, done];
   const [currentTicket, setCurrentTicket] = useState({
@@ -155,7 +156,7 @@ function HomeContent() {
       params.sortBy = sortBy;
       params.order = sortOrder;
 
-      const [ticketsRes, projectsRes, cyclesRes, labelsRes, usersRes, activitiesRes] =
+      const [ticketsRes, projectsRes, cyclesRes, labelsRes, usersRes, activitiesRes, inboxRes] =
         await Promise.all([
           ticketAPI.getAll(params),
           projectAPI.getAll(currentTeam ? { team: currentTeam._id } : {}),
@@ -163,6 +164,7 @@ function HomeContent() {
           labelAPI.getAll(currentTeam ? { team: currentTeam._id } : {}),
           userAPI.getAll(),
           activityAPI.getAll({ team: currentTeam?._id }),
+          inboxAPI.list().catch(() => ({ data: [] })),
         ]);
 
       const tickets = ticketsRes.data || [];
@@ -172,6 +174,7 @@ function HomeContent() {
       setLabels(labelsRes.data || []);
       setUsers(usersRes.data || []);
       setActivities(activitiesRes.data || []);
+      setInboxItems(Array.isArray(inboxRes.data) ? inboxRes.data : []);
     } catch (error) {
       console.error("Error fetching data:", error);
     }
@@ -290,6 +293,7 @@ function HomeContent() {
   const allIssues = [...backlog, ...todo, ...inprogress, ...indev, ...done];
   const hasNoIssues = allIssues.length === 0;
   const isMyIssuesView = activeView === 'my-issues';
+  const isInboxView = activeView === 'inbox';
 
   return (
     <>
@@ -324,8 +328,7 @@ function HomeContent() {
             <div className="feature">
               <div onClick={() => {
                 setActiveView('inbox');
-                router.push('/activity');
-              }} className={router.pathname === '/activity' ? 'active' : ''}>
+              }} className={activeView === 'inbox' ? 'active' : ''}>
                 <InboxIcon />
                 Inbox
               </div>
@@ -363,7 +366,7 @@ function HomeContent() {
         </div>
         <div className="ticket-cont">
             <div className="top-nav">
-              <div>{activeView === 'my-issues' ? 'My issues' : 'All Issues'}</div>
+              <div>{isInboxView ? 'Inbox' : activeView === 'my-issues' ? 'My issues' : 'All Issues'}</div>
               <StarIcon />
               <div className="view-toggle">
                 <button
@@ -421,7 +424,55 @@ function HomeContent() {
                 />
               </div>
             </div>
-            {hasNoIssues ? (
+            {isInboxView ? (
+              inboxItems.length === 0 ? (
+                <div className="empty-state-container">
+                  <div className="empty-state-icon">
+                    <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                      <circle cx="40" cy="40" r="38" stroke="currentColor" strokeWidth="2" opacity="0.2"/>
+                      <circle cx="40" cy="40" r="14" fill="currentColor" opacity="0.5"/>
+                    </svg>
+                  </div>
+                  <h3 className="empty-state-title">Your inbox is empty</h3>
+                  <p className="empty-state-description">
+                    Subscribe to issues (bell icon in the issue view) to get notified about updates here
+                  </p>
+                </div>
+              ) : (
+                <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
+                  {inboxItems.map((item: any, idx: number) => {
+                    const issue = item.issue;
+                    if (!issue) return null;
+                    const last = item.notifications?.[0];
+                    return (
+                      <div
+                        key={issue._id || idx}
+                        className="ticket"
+                        onClick={() => openIssue(issue._id)}
+                        style={{ cursor: "pointer", padding: "12px", borderRadius: 8 }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, opacity: 0.7 }}>
+                          <span>{issue.issueId}</span>
+                          <span>{last?.createdAt ? new Date(last.createdAt).toLocaleString() : ""}</span>
+                        </div>
+                        <div className="title">{issue.title}</div>
+                        <div className="ticket-meta" style={{ fontSize: 12, opacity: 0.8 }}>
+                          <span className={`priority priority-${(issue.priority || "medium").toLowerCase()}`}>
+                            {issue.priority}
+                          </span>
+                          <span style={{ marginLeft: 8 }}>{issue.status?.replace("_", " ")}</span>
+                          {last && (
+                            <span style={{ marginLeft: 8 }}>
+                              · {last.user?.name || "Someone"} {last.type || "updated"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : hasNoIssues ? (
               <div className="empty-state-container">
                 <div className="empty-state-icon">
                   <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
